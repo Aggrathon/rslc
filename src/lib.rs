@@ -1,4 +1,4 @@
-use ndarray::{ArrayBase, Data, Ix2, Ix1, s, DataOwned, DataMut, Array1};
+use ndarray::{s, Array1, Array2};
 use numpy::{IntoPyArray, PyArray2};
 use pyo3::exceptions::RuntimeError;
 use pyo3::prelude::{pymodule, Py, PyErr, PyModule, PyResult, Python};
@@ -32,7 +32,7 @@ fn matrix_index(k: usize, w: usize) -> (usize, usize) {
     (k - _linear_index(j+1, j, w) + j + 1, j)
 }
 
-fn flat_distance<A, S1, S2>(matrix: &ArrayBase<S1, Ix2>) -> ArrayBase<S2, Ix1> where S1: Data<Elem = A>, S2: DataMut<Elem = A> + DataOwned, A: Clone + Copy {
+fn flat_distance<A>(matrix: &Array2<A>) -> Array1<A> where A: Clone + Copy {
     assert_eq!(matrix.ndim(), 2);
     let w = matrix.ncols();
     let mut flat;
@@ -42,7 +42,7 @@ fn flat_distance<A, S1, S2>(matrix: &ArrayBase<S1, Ix2>) -> ArrayBase<S2, Ix1> w
         // There is no reading of uninitialised values here, only assignment.
         // Thus, this block is safe as long as all uninitialised values are written to,
         // which is the case (uncomment the assert to check, if not convinced).
-        flat = ArrayBase::uninitialized((w * w - w)/2);
+        flat = Array1::uninitialized((w * w - w)/2);
         let mut k = 0;
         for i in 0..(w-1) {
             let j = w - 1 - i;
@@ -54,42 +54,122 @@ fn flat_distance<A, S1, S2>(matrix: &ArrayBase<S1, Ix2>) -> ArrayBase<S2, Ix1> w
     flat
 }
 
-struct FloodFill<'a, S> where S: Data<Elem = usize> {
+pub trait DistanceMeasure {
+    fn is_finite(&self) -> bool;
+    const INFINITE_VALUE: Self;
+    const MINIMUM_VALUE: Self;
+}
+
+impl DistanceMeasure for f32 {
+    fn is_finite(&self) -> bool { *self >= 0.0 }
+    const INFINITE_VALUE: Self = -1.0;
+    const MINIMUM_VALUE: Self = 0.0;
+}
+
+impl DistanceMeasure for f64 {
+    fn is_finite(&self) -> bool { *self >= 0.0 }
+    const INFINITE_VALUE: Self = -1.0;
+    const MINIMUM_VALUE: Self = 0.0;
+}
+
+impl DistanceMeasure for isize {
+    fn is_finite(&self) -> bool { *self >= 0 }
+    const INFINITE_VALUE: Self = -1;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+impl DistanceMeasure for i16 {
+    fn is_finite(&self) -> bool { *self >= 0 }
+    const INFINITE_VALUE: Self = -1;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+impl DistanceMeasure for i32 {
+    fn is_finite(&self) -> bool { *self >= 0 }
+    const INFINITE_VALUE: Self = -1;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+impl DistanceMeasure for i64 {
+    fn is_finite(&self) -> bool { *self >= 0 }
+    const INFINITE_VALUE: Self = -1;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+impl DistanceMeasure for i128 {
+    fn is_finite(&self) -> bool { *self >= 0 }
+    const INFINITE_VALUE: Self = -1;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+impl DistanceMeasure for usize {
+    fn is_finite(&self) -> bool { *self != Self::MAX }
+    const INFINITE_VALUE: Self = Self::MAX;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+impl DistanceMeasure for u16 {
+    fn is_finite(&self) -> bool { *self != Self::MAX }
+    const INFINITE_VALUE: Self = Self::MAX;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+impl DistanceMeasure for u32 {
+    fn is_finite(&self) -> bool { *self != Self::MAX }
+    const INFINITE_VALUE: Self = Self::MAX;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+impl DistanceMeasure for u64 {
+    fn is_finite(&self) -> bool { *self != Self::MAX }
+    const INFINITE_VALUE: Self = Self::MAX;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+impl DistanceMeasure for u128 {
+    fn is_finite(&self) -> bool { *self != Self::MAX }
+    const INFINITE_VALUE: Self = Self::MAX;
+    const MINIMUM_VALUE: Self = 0;
+}
+
+struct FloodFill {
     start: usize,
     current: usize,
     cache: VecDeque<usize>,
     clusters: Array1<usize>,
     sizes: Vec<(usize, usize)>,
-    distances: &'a ArrayBase<S, Ix2>,
-
 }
 
-impl<'a, S> FloodFill<'a, S> where S: Data<Elem = usize> {
-    fn new(distances: &'a ArrayBase<S, Ix2>) -> Self {
+impl FloodFill {
+    fn new() -> Self {
         FloodFill {
             start: 0,
             current: 0,
-            cache: VecDeque::with_capacity(distances.ncols()),
-            clusters: Array1::zeros(distances.ncols()),
+            cache: VecDeque::new(),
+            clusters: Array1::zeros(0),
             sizes: vec!(),
-            distances
         }
     }
 
-    fn flood_fill(self: &mut Self) {
+    fn flood_fill<A>(&mut self, distances: &Array2<A>) where A: DistanceMeasure {
+        if self.clusters.len() != distances.ncols() {
+            self.clusters = Array1::zeros(distances.ncols());
+        }
         self.start = self.current + 1;
         let mut current = self.start;
         self.sizes.clear();
-        while let Some((i, _)) = self.clusters.iter().enumerate().find(|(i, x)| **x < self.start) {
+        while let Some((i, _)) = self.clusters.iter().enumerate().find(|(_, x)| **x < self.start) {
             self.cache.clear();
             self.clusters[i] = current;
             self.cache.push_back(i);
             let mut count = 1;
             while let Some(i) = self.cache.pop_front() {
-                for (j, _) in self.distances.outer_iter().nth(i).unwrap().iter().enumerate().filter(|(_, y)| **y < current) {
-                    self.clusters[j] = self.current;
-                    self.cache.push_back(j);
-                    count += 1;
+                for (j, _) in distances.outer_iter().nth(i).unwrap().iter().enumerate().filter(|(_, y)| A::is_finite(*y)) {
+                    if self.clusters[j] != current {
+                        self.clusters[j] = current;
+                        self.cache.push_back(j);
+                        count += 1;
+                    }
                 }
             }
             self.sizes.push((current, count));
@@ -99,18 +179,53 @@ impl<'a, S> FloodFill<'a, S> where S: Data<Elem = usize> {
     }
 }
 
-fn partial_flood_fill<S1, S2>(dists: &ArrayBase<S1, Ix2>, start: usize, current: usize, clusters: &mut ArrayBase<S2, Ix1>) -> usize where S1: Data, S2: DataMut<Elem = usize> {
-    match clusters.iter().enumerate().find(|(i, x)| **x < start){
-        Some((i, _)) => {
-            let mut i = i;
-            let mut min = i;
-            loop {
-
-            }
-            0
-        },
-        None => 0
+fn find_outliers(flood_fill: &FloodFill, outliers: &mut Array1<bool>, min_size: usize) -> bool {
+    let mut new_outliers = false;
+    for (i, _) in flood_fill.sizes.iter().filter(|(_, s)| *s < min_size) {
+        for (o, _) in outliers.iter_mut().zip(flood_fill.clusters.iter()).filter(|(_, c)| *c == i) {
+            *o = true;
+        }
+        new_outliers = true;
     }
+    new_outliers
+}
+
+fn rslc_slow<A>(distances: &Array2<A>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>) where A: DistanceMeasure + Copy + PartialOrd {
+    let mut dists = distances.to_owned();
+    let mut outliers = Array1::default(distances.ncols());
+    let mut flood_fill = FloodFill::new();
+    let mut order: Vec<(usize, usize)> = (0..(dists.ncols()-1)).map(|i| ((i+1)..dists.ncols()).zip(std::iter::repeat(i))).flatten().collect();
+    order.sort_unstable_by(|(i, j), (k, l)| dists[[*i, *j]].partial_cmp(&dists[[*k, *l]]).unwrap());
+    //TODO: Maybe throw error if any dist is not comparable (NaN)
+    for (i, j) in order.into_iter() {
+        let d = dists[[i, j]];
+        dists[[i, j]] = A::INFINITE_VALUE;
+        flood_fill.flood_fill(&dists);
+        if flood_fill.sizes.len() > clusters {
+            dists[[i, j]] = d;
+            flood_fill.flood_fill(&dists);
+            break;
+        }
+        if find_outliers(&flood_fill, &mut outliers, min_size) {
+            dists[[i, j]] = A::MINIMUM_VALUE;
+        }
+    }
+    (flood_fill.clusters - flood_fill.start, outliers)
+}
+
+
+fn rslc() {
+    //TODO order dists descending
+    // loop
+        // remove n dists
+        // flood_fill
+        // check number of clusters
+            // backtrack until correct number
+        // check outliers
+            // backtrack until no outliers, mark outliers, change dist to 0
+        // if correct number of clusters and no outliers
+            // break
+    // return clusters and outliers
 }
 
 
@@ -133,7 +248,7 @@ fn rust_linalg(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{Array, OwnedRepr};
+    use ndarray::{Array1, array, Array2};
     use super::*;
 
     #[test]
@@ -157,9 +272,15 @@ mod tests {
     }
 
     #[test]
+    fn rslc1() {
+        let x = array![[0,4,3],[4,0,2],[3,2,0]];
+        rslc_slow(&x, 3, 0);
+    }
+
+    #[test]
     fn flat() {
-        let x: ArrayBase<OwnedRepr<f32>, Ix2> = Array::zeros((5, 5));
-        let flat: ArrayBase<OwnedRepr<f32>, Ix1> = flat_distance(&x);
-        assert_eq!(flat, Array::zeros(10));
+        let x: Array2<f32> = Array2::zeros((5, 5));
+        let flat = flat_distance(&x);
+        assert_eq!(flat, Array1::zeros(10));
     }
 }
