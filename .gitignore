@@ -1,3 +1,18 @@
-/target
+# Some Rust specific files
 **/*.rs.bk
 Cargo.lock
+target/
+*.rustfmt
+rusty-tags.*
+
+# Some Python specific files
+.tox/
+build/
+*.so
+*.egg-info/
+**/dist/
+__pycache__
+*.pyd
+
+# Some IDE specific files
+.vscode
