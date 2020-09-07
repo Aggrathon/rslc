@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 [dependencies]
 numpy = "0.11.0"
 ndarray = "0.13"
+num-traits = "0.2"
 
 [dependencies.pyo3]
 version = "0.11.1"

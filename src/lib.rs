@@ -1,57 +1,18 @@
-use ndarray::{s, Array1, Array2};
+
+mod utils;
+
+use ndarray::{s, Array1, Array2, indices_of};
 use numpy::{IntoPyArray, PyArray2};
 use pyo3::exceptions::RuntimeError;
 use pyo3::prelude::{pymodule, Py, PyErr, PyModule, PyResult, Python};
 use std::fmt::Display;
 use std::collections::VecDeque;
 
+use utils::Combinations;
+
 
 fn make_error<E: Display + Sized>(e: E) -> PyErr {
     PyErr::new::<RuntimeError, _>(format!("[rslc] {}", e))
-}
-
-fn linear_index(i: usize, j: usize, w: usize) -> usize {
-    assert!(i != j);
-    assert!(j < w);
-    assert!(i < w);
-    if i < j { 
-        _linear_index(j, i, w)
-    } else {
-        _linear_index(i, j, w)
-    }
-}
-
-const fn _linear_index(i: usize, j: usize, w: usize) -> usize {
-    i + j * w - j * (j + 3) / 2 - 1
-}
-
-fn matrix_index(k: usize, w: usize) -> (usize, usize) {
-    assert!(k < w * (w - 1) / 2);
-    let mut j = k / (w-1);
-    while _linear_index(j+2, j+1, w) <= k { j += 1; }
-    (k - _linear_index(j+1, j, w) + j + 1, j)
-}
-
-fn flat_distance<A>(matrix: &Array2<A>) -> Array1<A> where A: Clone + Copy {
-    assert_eq!(matrix.ndim(), 2);
-    let w = matrix.ncols();
-    let mut flat;
-    unsafe {
-        // SAFETY: An uninitialised array is used for maximum speed.
-        // It is unsafe to read uninitialised values, but it is safe to write to them.
-        // There is no reading of uninitialised values here, only assignment.
-        // Thus, this block is safe as long as all uninitialised values are written to,
-        // which is the case (uncomment the assert to check, if not convinced).
-        flat = Array1::uninitialized((w * w - w)/2);
-        let mut k = 0;
-        for i in 0..(w-1) {
-            let j = w - 1 - i;
-            flat.slice_mut(s![k..(k+j)]).assign(&matrix.slice(s![i,(i+1)..w]));
-            k += j;
-        }
-        //assert_eq!(k, (w * w - w)/2);
-    }
-    flat
 }
 
 pub trait DistanceMeasure {
@@ -194,15 +155,16 @@ fn rslc_slow<A>(distances: &Array2<A>, clusters: usize, min_size: usize) -> (Arr
     let mut dists = distances.to_owned();
     let mut outliers = Array1::default(distances.ncols());
     let mut flood_fill = FloodFill::new();
-    let mut order: Vec<(usize, usize)> = (0..(dists.ncols()-1)).map(|i| ((i+1)..dists.ncols()).zip(std::iter::repeat(i))).flatten().collect();
-    order.sort_unstable_by(|(i, j), (k, l)| dists[[*i, *j]].partial_cmp(&dists[[*k, *l]]).unwrap());
-    //TODO: Maybe throw error if any dist is not comparable (NaN)
+    let mut order: Vec<(usize, usize)> = Combinations::iter(dists.ncols()).collect();
+    order.sort_unstable_by(|a, b| dists[*a].partial_cmp(&dists[*b]).unwrap());
     for (i, j) in order.into_iter() {
         let d = dists[[i, j]];
         dists[[i, j]] = A::INFINITE_VALUE;
+        dists[[j, i]] = A::INFINITE_VALUE;
         flood_fill.flood_fill(&dists);
         if flood_fill.sizes.len() > clusters {
             dists[[i, j]] = d;
+            dists[[j, i]] = d;
             flood_fill.flood_fill(&dists);
             break;
         }
@@ -252,35 +214,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn index_transformation1() {
-        assert_eq!(linear_index(1, 0, 5), 0);
-        assert_eq!(linear_index(2, 0, 5), 1);
-        assert_eq!(linear_index(2, 1, 5), 4);
-        assert_eq!(linear_index(3, 2, 5), 7);
-        assert_eq!(linear_index(4, 3, 5), 9);
-        assert_eq!(linear_index(0, 1, 5), 0);
-        assert_eq!(linear_index(2, 3, 5), 7);
-    }
-
-    #[test]
-    fn index_transformation2() {
-        assert_eq!(matrix_index(0, 5), (1, 0));
-        assert_eq!(matrix_index(1, 5), (2, 0));
-        assert_eq!(matrix_index(4, 5), (2, 1));
-        assert_eq!(matrix_index(7, 5), (3, 2));
-        assert_eq!(matrix_index(9, 5), (4, 3));
-    }
-
-    #[test]
     fn rslc1() {
         let x = array![[0,4,3],[4,0,2],[3,2,0]];
         rslc_slow(&x, 3, 0);
-    }
-
-    #[test]
-    fn flat() {
-        let x: Array2<f32> = Array2::zeros((5, 5));
-        let flat = flat_distance(&x);
-        assert_eq!(flat, Array1::zeros(10));
     }
 }
