@@ -9,7 +9,7 @@ def cluster(distance_matrix: np.ndarray, num_clusters: int, min_size: int = None
     Args:
         distance_matrix (numpy.ndarray): A square distance matrix between items (complete, not triangular)
         num_clusters (int): The number of clusters to find.
-        min_size (int, optional): Minimum cluster-size (used to detect outliers). Can also be a percentage (float between 0 and 1) of the number of items (rows / columns in the distance matrix). Defaults to `0.5**(num_clusters + 1)`.
+        min_size (int, optional): Minimum cluster-size (used to detect outliers). Can also be a percentage (float between 0 and 1) of the number of items (rows / columns in the distance matrix). Defaults to `num_clusters**-2`.
 
     Returns:
         numpy.ndarray: An integer vector with a cluster index for each item.
@@ -17,7 +17,7 @@ def cluster(distance_matrix: np.ndarray, num_clusters: int, min_size: int = None
     """
     # Default value for min_size
     if min_size is None:
-        min_size = 0.5**(num_clusters + 1)
+        min_size = num_clusters**-2
     # Some sanity checks
     assert len(distance_matrix.shape) == 2
     assert distance_matrix.shape[0] == distance_matrix.shape[1]

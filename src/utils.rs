@@ -1,43 +1,8 @@
 use ndarray::{s, Array1, Array2};
-use num_traits::{PrimInt};
 
 
 //--------------------------------------
-// Iterator over combinations
-//--------------------------------------
-
-pub struct Combinations<A> where A: PrimInt {
-    n: A,
-    a: A,
-    b: A
-}
-
-impl<A> Iterator for Combinations<A> where A: PrimInt {
-    type Item = (A, A);
-
-    fn next(&mut self) -> Option<(A, A)> {
-        self.b = self.b + A::one();
-        if self.b >= self.n {
-            self.a = self.a + A::one();
-            if self.a + A::one() >= self.n {
-                return Option::None;
-            }
-            self.b = self.a + A::one();
-           
-        }
-        Option::Some((self.a, self.b))
-    }
-}
-
-impl<A> Combinations<A> where A: PrimInt {
-    pub fn iter(n: A) -> Self {
-        Combinations{n, a:A::zero(), b:A::zero()}
-    }
-}
-
-
-//--------------------------------------
-// Distance matrix to distance vector
+// Distance matrix to flattened vector
 //--------------------------------------
 
 fn flat_index(i: usize, j: usize, width: usize) -> usize {
@@ -93,12 +58,6 @@ fn flat_distance<A>(matrix: &Array2<A>) -> Array1<A> where A: Clone + Copy {
 mod tests {
     use ndarray::{Array1, Array2};
     use super::*;
-
-    #[test]
-    fn combn() {
-        let combs: Vec<(u32, u32)> = Combinations::iter(5).collect();
-        assert_eq!(combs, vec![(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),]);
-    }
 
     #[test]
     fn index_transformation1() {
