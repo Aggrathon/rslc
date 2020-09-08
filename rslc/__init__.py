@@ -2,7 +2,19 @@
 import numpy as np
 from .rslc import *
 
+
 def cluster(distance_matrix: np.ndarray, num_clusters: int, min_size: int = None) -> (np.ndarray, np.ndarray):
+    """The Robust Single-Linkage Clustering Algorithm
+
+    Args:
+        distance_matrix (numpy.ndarray): A square distance matrix between items (complete, not triangular)
+        num_clusters (int): The number of clusters to find.
+        min_size (int, optional): Minimum cluster-size (used to detect outliers). Can also be a percentage (float between 0 and 1) of the number of items (rows / columns in the distance matrix). Defaults to `0.5**(num_clusters + 1)`.
+
+    Returns:
+        numpy.ndarray: An integer vector with a cluster index for each item.
+        numpy.ndarray: A boolen vector marking outliers.
+    """
     # Default value for min_size
     if min_size is None:
         min_size = 0.5**(num_clusters + 1)
@@ -31,4 +43,4 @@ def cluster(distance_matrix: np.ndarray, num_clusters: int, min_size: int = None
         return rslc_i16(distance_matrix, num_clusters, min_size)
     if distance_matrix.dtype == np.uint16:
         return rslc_u16(distance_matrix, num_clusters, min_size)
-    return rslc_f64(distance_matrix.astype(np.float64), num_clusters, min_size)
+    return rslc_f64(distance_matrix.astype(np.float32), num_clusters, min_size)
