@@ -8,7 +8,7 @@ test_requires = install_requires + ['pytest']
 
 setup(
     name='rslc',
-    version='0.1.0',
+    version='0.2.0',
     description='Robust Single-Linkage Clustering',
     rust_extensions=[RustExtension(
         'rslc.rslc',
