@@ -1,7 +1,7 @@
 
 mod utils;
 
-use ndarray::{s, Array1, Array2, indices_of};
+use ndarray::{Array1, Array2};
 use numpy::{IntoPyArray, PyArray2};
 use pyo3::exceptions::RuntimeError;
 use pyo3::prelude::{pymodule, Py, PyErr, PyModule, PyResult, Python};
@@ -125,7 +125,7 @@ impl FloodFill {
             self.cache.push_back(i);
             let mut count = 1;
             while let Some(i) = self.cache.pop_front() {
-                for (j, _) in distances.outer_iter().nth(i).unwrap().iter().enumerate().filter(|(_, y)| A::is_finite(*y)) {
+                for (j, _) in distances.outer_iter().nth(i).unwrap().iter().enumerate().filter(|(_, y)| y.is_finite()) {
                     if self.clusters[j] != current {
                         self.clusters[j] = current;
                         self.cache.push_back(j);
@@ -151,43 +151,48 @@ fn find_outliers(flood_fill: &FloodFill, outliers: &mut Array1<bool>, min_size: 
     new_outliers
 }
 
-fn rslc_slow<A>(distances: &Array2<A>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>) where A: DistanceMeasure + Copy + PartialOrd {
+fn breadth_first_search<A>(distances: &Array2<A>, start: usize, end: usize) -> bool where A: DistanceMeasure {
+    let mut queue = VecDeque::new();
+    let mut visited = vec![false; distances.ncols()];
+    queue.push_back(start);
+    visited[start] = true;
+    while let Some(current) = queue.pop_front() {
+        for (i, (_, v)) in distances.outer_iter().nth(current).unwrap().iter().zip(visited.iter_mut()).filter(|(d, v)| d.is_finite() & !**v).enumerate() {
+            // Early exit, since this checks for possible path, not shortest
+            if distances[[end, i]].is_finite() {
+                return true;
+            }
+            *v = true;
+            queue.push_back(i);
+        }
+    }
+    false
+}
+
+fn rslc<A>(distances: &Array2<A>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>) where A: DistanceMeasure + Copy + PartialOrd {
     let mut dists = distances.to_owned();
     let mut outliers = Array1::default(distances.ncols());
     let mut flood_fill = FloodFill::new();
     let mut order: Vec<(usize, usize)> = Combinations::iter(dists.ncols()).collect();
-    order.sort_unstable_by(|a, b| dists[*a].partial_cmp(&dists[*b]).unwrap());
+    order.sort_unstable_by(|a, b| dists[*b].partial_cmp(&dists[*a]).unwrap());
     for (i, j) in order.into_iter() {
-        let d = dists[[i, j]];
         dists[[i, j]] = A::INFINITE_VALUE;
         dists[[j, i]] = A::INFINITE_VALUE;
-        flood_fill.flood_fill(&dists);
-        if flood_fill.sizes.len() > clusters {
-            dists[[i, j]] = d;
-            dists[[j, i]] = d;
+        // if i and j are still connected no checks for new clusters are needed
+        if !breadth_first_search(&dists, i, j) {
             flood_fill.flood_fill(&dists);
-            break;
-        }
-        if find_outliers(&flood_fill, &mut outliers, min_size) {
-            dists[[i, j]] = A::MINIMUM_VALUE;
+            if flood_fill.sizes.len() > clusters {
+                dists[[i, j]] = A::MINIMUM_VALUE;
+                dists[[j, i]] = A::MINIMUM_VALUE;
+                flood_fill.flood_fill(&dists);
+                break;
+            }
+            if find_outliers(&flood_fill, &mut outliers, min_size) {
+                dists[[i, j]] = A::MINIMUM_VALUE;
+            }
         }
     }
     (flood_fill.clusters - flood_fill.start, outliers)
-}
-
-
-fn rslc() {
-    //TODO order dists descending
-    // loop
-        // remove n dists
-        // flood_fill
-        // check number of clusters
-            // backtrack until correct number
-        // check outliers
-            // backtrack until no outliers, mark outliers, change dist to 0
-        // if correct number of clusters and no outliers
-            // break
-    // return clusters and outliers
 }
 
 
@@ -216,6 +221,33 @@ mod tests {
     #[test]
     fn rslc1() {
         let x = array![[0,4,3],[4,0,2],[3,2,0]];
-        rslc_slow(&x, 3, 0);
+        rslc(&x, 3, 0);
+    }
+
+    #[test]
+    fn rslc2() {
+        // This distance matrix describes a smiley-face with to outliers below the mouth.
+        // The expected clusters are the eyes and the mouth.
+        let x = array![
+            [0,1,1, 4,4,4, 2,2,3,4,5,6, 5,6],
+            [1,0,1, 4,4,4, 2,2,3,4,5,6, 5,6],
+            [1,1,0, 4,4,4, 2,2,3,4,5,6, 5,6],
+
+            [4,4,4, 0,1,1, 6,5,4,3,2,2, 6,5],
+            [4,4,4, 1,0,1, 6,5,4,3,2,2, 6,5],
+            [4,4,4, 1,1,0, 6,5,4,3,2,2, 6,5],
+
+            [2,2,2 ,6,6,6, 0,1,2,3,4,5, 4,6],
+            [2,2,2 ,5,5,5, 1,0,1,2,3,4, 3,5],
+            [3,3,3 ,4,4,4, 2,1,0,1,2,3, 3,4],
+            [4,4,4 ,3,3,3, 3,2,1,0,1,2, 4,3],
+            [5,5,5 ,2,2,2, 4,3,2,1,0,1, 5,3],
+            [6,6,6 ,2,2,2, 5,4,3,2,1,0, 6,4],
+
+            [5,5,5 ,6,6,6, 4,3,3,4,5,6, 0,4],
+            [6,6,6 ,5,5,5, 6,5,4,3,3,4, 4,0],];
+        let (clusters, outliers) = rslc(&x, 3, 2);
+        assert_eq!(outliers, array![false,false,false, false,false,false, false,false,false,false,false,false, true,true]);
+        assert_eq!(clusters, array![0,0,0, 1,1,1, 2,2,2,2,2,2, 2,2]);
     }
 }
