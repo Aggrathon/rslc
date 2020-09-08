@@ -1,15 +1,13 @@
-
 mod utils;
 
 use ndarray::{Array1, Array2};
 use numpy::{IntoPyArray, PyArray2};
 use pyo3::exceptions::RuntimeError;
 use pyo3::prelude::{pymodule, Py, PyErr, PyModule, PyResult, Python};
-use std::fmt::Display;
 use std::collections::VecDeque;
+use std::fmt::Display;
 
 use utils::Combinations;
-
 
 fn make_error<E: Display + Sized>(e: E) -> PyErr {
     PyErr::new::<RuntimeError, _>(format!("[rslc] {}", e))
@@ -108,24 +106,38 @@ impl FloodFill {
             current: 0,
             cache: VecDeque::new(),
             clusters: Array1::zeros(0),
-            sizes: vec!(),
+            sizes: Vec::new(),
         }
     }
 
-    fn flood_fill<A>(&mut self, distances: &Array2<A>) where A: DistanceMeasure {
+    fn flood_fill<A>(&mut self, distances: &Array2<A>)
+    where A: DistanceMeasure,
+    {
         if self.clusters.len() != distances.ncols() {
             self.clusters = Array1::zeros(distances.ncols());
         }
         self.start = self.current + 1;
         let mut current = self.start;
         self.sizes.clear();
-        while let Some((i, _)) = self.clusters.iter().enumerate().find(|(_, x)| **x < self.start) {
+        while let Some((i, _)) = self
+            .clusters
+            .iter()
+            .enumerate()
+            .find(|(_, x)| **x < self.start)
+        {
             self.cache.clear();
             self.clusters[i] = current;
             self.cache.push_back(i);
             let mut count = 1;
             while let Some(i) = self.cache.pop_front() {
-                for (j, _) in distances.outer_iter().nth(i).unwrap().iter().enumerate().filter(|(_, y)| y.is_finite()) {
+                for (j, _) in distances
+                    .outer_iter()
+                    .nth(i)
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, y)| y.is_finite())
+                {
                     if self.clusters[j] != current {
                         self.clusters[j] = current;
                         self.cache.push_back(j);
@@ -143,7 +155,11 @@ impl FloodFill {
 fn find_outliers(flood_fill: &FloodFill, outliers: &mut Array1<bool>, min_size: usize) -> bool {
     let mut new_outliers = false;
     for (i, _) in flood_fill.sizes.iter().filter(|(_, s)| *s < min_size) {
-        for (o, _) in outliers.iter_mut().zip(flood_fill.clusters.iter()).filter(|(_, c)| *c == i) {
+        for (o, _) in outliers
+            .iter_mut()
+            .zip(flood_fill.clusters.iter())
+            .filter(|(_, c)| *c == i)
+        {
             *o = true;
         }
         new_outliers = true;
@@ -151,13 +167,23 @@ fn find_outliers(flood_fill: &FloodFill, outliers: &mut Array1<bool>, min_size: 
     new_outliers
 }
 
-fn breadth_first_search<A>(distances: &Array2<A>, start: usize, end: usize) -> bool where A: DistanceMeasure {
+fn breadth_first_search<A>(distances: &Array2<A>, start: usize, end: usize) -> bool
+where A: DistanceMeasure,
+{
     let mut queue = VecDeque::new();
     let mut visited = vec![false; distances.ncols()];
     queue.push_back(start);
     visited[start] = true;
     while let Some(current) = queue.pop_front() {
-        for (i, (_, v)) in distances.outer_iter().nth(current).unwrap().iter().zip(visited.iter_mut()).filter(|(d, v)| d.is_finite() & !**v).enumerate() {
+        for (i, (_, v)) in distances
+            .outer_iter()
+            .nth(current)
+            .unwrap()
+            .iter()
+            .zip(visited.iter_mut())
+            .filter(|(d, v)| d.is_finite() & !**v)
+            .enumerate()
+        {
             // Early exit, since this checks for possible path, not shortest
             if distances[[end, i]].is_finite() {
                 return true;
@@ -169,7 +195,9 @@ fn breadth_first_search<A>(distances: &Array2<A>, start: usize, end: usize) -> b
     false
 }
 
-fn rslc<A>(distances: &Array2<A>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>) where A: DistanceMeasure + Copy + PartialOrd {
+fn rslc<A>(distances: &Array2<A>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>)
+where A: DistanceMeasure + Copy + PartialOrd,
+{
     let mut dists = distances.to_owned();
     let mut outliers = Array1::default(distances.ncols());
     let mut flood_fill = FloodFill::new();
@@ -195,11 +223,8 @@ fn rslc<A>(distances: &Array2<A>, clusters: usize, min_size: usize) -> (Array1<u
     (flood_fill.clusters - flood_fill.start, outliers)
 }
 
-
-
 #[pymodule]
 fn rust_linalg(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-    
     #[pyfn(m, "inv")]
     fn inv(py: Python<'_>, x: &PyArray2<f64>) -> PyResult<Py<PyArray2<f64>>> {
         // let x = x.as_array().inv().map_err(make_error)?;
@@ -210,17 +235,14 @@ fn rust_linalg(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-
-
-
 #[cfg(test)]
 mod tests {
-    use ndarray::{Array1, array, Array2};
     use super::*;
+    use ndarray::{array};
 
     #[test]
     fn rslc1() {
-        let x = array![[0,4,3],[4,0,2],[3,2,0]];
+        let x = array![[0, 4, 3], [4, 0, 2], [3, 2, 0]];
         rslc(&x, 3, 0);
     }
 
