@@ -1,13 +1,13 @@
 mod utils;
 
 use ndarray::{Array1, Array2, ArrayBase, Ix2, Data};
+use std::collections::VecDeque;
+use utils::Combinations;
+
 use numpy::{IntoPyArray, PyReadonlyArray2, PyArray1};
 use pyo3::prelude::{pymodule, Py, PyModule, PyResult, Python, pyfunction};
 use pyo3::wrap_pyfunction;
-use std::collections::VecDeque;
 use paste::paste;
-
-use utils::Combinations;
 
 
 //--------------------------------------
@@ -186,7 +186,6 @@ where
     (flood_fill.clusters - flood_fill.start, outliers)
 }
 
-
 //--------------------------------------
 // Python Interface
 //--------------------------------------
@@ -212,9 +211,8 @@ macro_rules! py_rslc2 {
 
 py_rslc1!(f32, f64, i16, i32, i64, u16, u32, u64);
 
-
-#[pymodule]
-fn rust_linalg(_py: Python<'_>, m: &PyModule) -> PyResult<()>
+#[pymodule(rslc)]
+fn py_rslc(_py: Python<'_>, m: &PyModule) -> PyResult<()>
 {
     py_rslc2!(m, f32, f64, i16, i32, i64, u16, u32, u64);
 
@@ -232,13 +230,13 @@ mod tests {
     use ndarray::{array};
 
     #[test]
-    fn rslc1() {
+    fn rslc_basic() {
         let x = array![[0, 4, 3], [4, 0, 2], [3, 2, 0]];
         rslc(&x, 3, 0);
     }
 
     #[test]
-    fn rslc2() {
+    fn rslc_truth() {
         // This distance matrix describes a smiley-face with to outliers below the mouth.
         // The expected clusters are the eyes and the mouth.
         let x = array![
