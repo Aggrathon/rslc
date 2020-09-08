@@ -1,17 +1,11 @@
 mod utils;
 
-use ndarray::{Array1, Array2};
-use numpy::{IntoPyArray, PyArray2};
-use pyo3::exceptions::RuntimeError;
-use pyo3::prelude::{pymodule, Py, PyErr, PyModule, PyResult, Python};
+use ndarray::{Array1, Array2, ArrayBase, Ix2, Data};
+use numpy::{IntoPyArray, PyReadonlyArray2, PyArray1};
+use pyo3::prelude::{pymodule, Py, PyModule, PyResult, Python};
 use std::collections::VecDeque;
-use std::fmt::Display;
 
 use utils::Combinations;
-
-fn make_error<E: Display + Sized>(e: E) -> PyErr {
-    PyErr::new::<RuntimeError, _>(format!("[rslc] {}", e))
-}
 
 pub trait DistanceMeasure {
     fn is_finite(&self) -> bool;
@@ -195,8 +189,10 @@ where A: DistanceMeasure,
     false
 }
 
-fn rslc<A>(distances: &Array2<A>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>)
-where A: DistanceMeasure + Copy + PartialOrd,
+fn rslc<D, E>(distances: &ArrayBase<D, Ix2>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>)
+where 
+    D: Data<Elem = E>,
+    E: DistanceMeasure + Copy + PartialOrd,
 {
     let mut dists = distances.to_owned();
     let mut outliers = Array1::default(distances.ncols());
@@ -204,19 +200,19 @@ where A: DistanceMeasure + Copy + PartialOrd,
     let mut order: Vec<(usize, usize)> = Combinations::iter(dists.ncols()).collect();
     order.sort_unstable_by(|a, b| dists[*b].partial_cmp(&dists[*a]).unwrap());
     for (i, j) in order.into_iter() {
-        dists[[i, j]] = A::INFINITE_VALUE;
-        dists[[j, i]] = A::INFINITE_VALUE;
+        dists[[i, j]] = E::INFINITE_VALUE;
+        dists[[j, i]] = E::INFINITE_VALUE;
         // if i and j are still connected no checks for new clusters are needed
         if !breadth_first_search(&dists, i, j) {
             flood_fill.flood_fill(&dists);
             if flood_fill.sizes.len() > clusters {
-                dists[[i, j]] = A::MINIMUM_VALUE;
-                dists[[j, i]] = A::MINIMUM_VALUE;
+                dists[[i, j]] = E::MINIMUM_VALUE;
+                dists[[j, i]] = E::MINIMUM_VALUE;
                 flood_fill.flood_fill(&dists);
                 break;
             }
             if find_outliers(&flood_fill, &mut outliers, min_size) {
-                dists[[i, j]] = A::MINIMUM_VALUE;
+                dists[[i, j]] = E::MINIMUM_VALUE;
             }
         }
     }
@@ -224,12 +220,70 @@ where A: DistanceMeasure + Copy + PartialOrd,
 }
 
 #[pymodule]
-fn rust_linalg(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-    #[pyfn(m, "inv")]
-    fn inv(py: Python<'_>, x: &PyArray2<f64>) -> PyResult<Py<PyArray2<f64>>> {
-        // let x = x.as_array().inv().map_err(make_error)?;
-        // Ok(x.into_pyarray(py).to_owned())
-        Ok(x.to_owned())
+fn rust_linalg(_py: Python<'_>, m: &PyModule) -> PyResult<()>
+{
+    #[pyfn(m, "rslc_f64")]
+    fn rslc_f64(py: Python<'_>, distances: PyReadonlyArray2<f64>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
+    {
+        let dists = distances.as_array();
+        let (clusters, outliers) = rslc(&dists, clusters, min_size);
+        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
+    }
+
+    #[pyfn(m, "rslc_f32")]
+    fn rslc_f32(py: Python<'_>, distances: PyReadonlyArray2<f32>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
+    {
+        let dists = distances.as_array();
+        let (clusters, outliers) = rslc(&dists, clusters, min_size);
+        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
+    }
+
+    #[pyfn(m, "rslc_i16")]
+    fn rslc_i16(py: Python<'_>, distances: PyReadonlyArray2<i16>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
+    {
+        let dists = distances.as_array();
+        let (clusters, outliers) = rslc(&dists, clusters, min_size);
+        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
+    }
+
+    #[pyfn(m, "rslc_i32")]
+    fn rslc_i32(py: Python<'_>, distances: PyReadonlyArray2<i32>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
+    {
+        let dists = distances.as_array();
+        let (clusters, outliers) = rslc(&dists, clusters, min_size);
+        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
+    }
+
+    #[pyfn(m, "rslc_i64")]
+    fn rslc_i64(py: Python<'_>, distances: PyReadonlyArray2<i64>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
+    {
+        let dists = distances.as_array();
+        let (clusters, outliers) = rslc(&dists, clusters, min_size);
+        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
+    }
+
+    #[pyfn(m, "rslc_u16")]
+    fn rslc_u16(py: Python<'_>, distances: PyReadonlyArray2<u16>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
+    {
+        let dists = distances.as_array();
+        let (clusters, outliers) = rslc(&dists, clusters, min_size);
+        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
+    }
+
+    #[pyfn(m, "rslc_u32")]
+    fn rslc_u32(py: Python<'_>, distances: PyReadonlyArray2<u32>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
+    {
+        let dists = distances.as_array();
+        let (clusters, outliers) = rslc(&dists, clusters, min_size);
+        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
+    }
+
+    #[pyfn(m, "rslc_u64")]
+    fn rslc_u64(py: Python<'_>, distances: PyReadonlyArray2<u64>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
+    {
+        let dists = distances.as_array();
+        let (clusters, outliers) = rslc(&dists, clusters, min_size);
+        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
     }
 
     Ok(())
