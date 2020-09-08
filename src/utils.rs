@@ -2,6 +2,10 @@ use ndarray::{s, Array1, Array2};
 use num_traits::{PrimInt};
 
 
+//--------------------------------------
+// Iterator over combinations
+//--------------------------------------
+
 pub struct Combinations<A> where A: PrimInt {
     n: A,
     a: A,
@@ -32,6 +36,9 @@ impl<A> Combinations<A> where A: PrimInt {
 }
 
 
+//--------------------------------------
+// Distance matrix to distance vector
+//--------------------------------------
 
 fn flat_index(i: usize, j: usize, width: usize) -> usize {
     assert!(i != j);
@@ -77,6 +84,10 @@ fn flat_distance<A>(matrix: &Array2<A>) -> Array1<A> where A: Clone + Copy {
     flat
 }
 
+
+//--------------------------------------
+// Tests
+//--------------------------------------
 
 #[cfg(test)]
 mod tests {

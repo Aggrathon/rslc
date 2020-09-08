@@ -2,10 +2,17 @@ mod utils;
 
 use ndarray::{Array1, Array2, ArrayBase, Ix2, Data};
 use numpy::{IntoPyArray, PyReadonlyArray2, PyArray1};
-use pyo3::prelude::{pymodule, Py, PyModule, PyResult, Python};
+use pyo3::prelude::{pymodule, Py, PyModule, PyResult, Python, pyfunction};
+use pyo3::wrap_pyfunction;
 use std::collections::VecDeque;
+use paste::paste;
 
 use utils::Combinations;
+
+
+//--------------------------------------
+// Trait for distances
+//--------------------------------------
 
 pub trait DistanceMeasure {
     fn is_finite(&self) -> bool;
@@ -13,79 +20,26 @@ pub trait DistanceMeasure {
     const MINIMUM_VALUE: Self;
 }
 
-impl DistanceMeasure for f32 {
-    fn is_finite(&self) -> bool { *self >= 0.0 }
-    const INFINITE_VALUE: Self = -1.0;
-    const MINIMUM_VALUE: Self = 0.0;
+macro_rules! dm {
+    ($($type:ident),+; $isf_tt:tt, $isf_v:expr, $inf:expr, $min:expr) => {$(
+        impl DistanceMeasure for $type {
+            fn is_finite(&self) -> bool { *self $isf_tt $isf_v }
+            const INFINITE_VALUE: Self = $inf;
+            const MINIMUM_VALUE: Self = $min;
+        }
+     )+};
 }
 
-impl DistanceMeasure for f64 {
-    fn is_finite(&self) -> bool { *self >= 0.0 }
-    const INFINITE_VALUE: Self = -1.0;
-    const MINIMUM_VALUE: Self = 0.0;
-}
+dm!(f32, f64; >=, 0.0, -1.0, 0.0);
+dm!(isize, i16,  i32, i64, i128; >=, 0, -1, 0);
+dm!(usize, u16, u32, u64, u128; !=, Self::MAX, Self::MAX, 0);
 
-impl DistanceMeasure for isize {
-    fn is_finite(&self) -> bool { *self >= 0 }
-    const INFINITE_VALUE: Self = -1;
-    const MINIMUM_VALUE: Self = 0;
-}
 
-impl DistanceMeasure for i16 {
-    fn is_finite(&self) -> bool { *self >= 0 }
-    const INFINITE_VALUE: Self = -1;
-    const MINIMUM_VALUE: Self = 0;
-}
+//--------------------------------------
+// Flood fill to find clusters
+//--------------------------------------
 
-impl DistanceMeasure for i32 {
-    fn is_finite(&self) -> bool { *self >= 0 }
-    const INFINITE_VALUE: Self = -1;
-    const MINIMUM_VALUE: Self = 0;
-}
-
-impl DistanceMeasure for i64 {
-    fn is_finite(&self) -> bool { *self >= 0 }
-    const INFINITE_VALUE: Self = -1;
-    const MINIMUM_VALUE: Self = 0;
-}
-
-impl DistanceMeasure for i128 {
-    fn is_finite(&self) -> bool { *self >= 0 }
-    const INFINITE_VALUE: Self = -1;
-    const MINIMUM_VALUE: Self = 0;
-}
-
-impl DistanceMeasure for usize {
-    fn is_finite(&self) -> bool { *self != Self::MAX }
-    const INFINITE_VALUE: Self = Self::MAX;
-    const MINIMUM_VALUE: Self = 0;
-}
-
-impl DistanceMeasure for u16 {
-    fn is_finite(&self) -> bool { *self != Self::MAX }
-    const INFINITE_VALUE: Self = Self::MAX;
-    const MINIMUM_VALUE: Self = 0;
-}
-
-impl DistanceMeasure for u32 {
-    fn is_finite(&self) -> bool { *self != Self::MAX }
-    const INFINITE_VALUE: Self = Self::MAX;
-    const MINIMUM_VALUE: Self = 0;
-}
-
-impl DistanceMeasure for u64 {
-    fn is_finite(&self) -> bool { *self != Self::MAX }
-    const INFINITE_VALUE: Self = Self::MAX;
-    const MINIMUM_VALUE: Self = 0;
-}
-
-impl DistanceMeasure for u128 {
-    fn is_finite(&self) -> bool { *self != Self::MAX }
-    const INFINITE_VALUE: Self = Self::MAX;
-    const MINIMUM_VALUE: Self = 0;
-}
-
-struct FloodFill {
+pub struct FloodFill {
     start: usize,
     current: usize,
     cache: VecDeque<usize>,
@@ -94,7 +48,7 @@ struct FloodFill {
 }
 
 impl FloodFill {
-    fn new() -> Self {
+    pub fn new() -> Self {
         FloodFill {
             start: 0,
             current: 0,
@@ -104,7 +58,15 @@ impl FloodFill {
         }
     }
 
-    fn flood_fill<A>(&mut self, distances: &Array2<A>)
+    pub fn start<A>(distances: &Array2<A>) -> Self
+    where A: DistanceMeasure,
+    {
+        let mut ff = Self::new();
+        ff.flood_fill(distances);
+        ff
+    }
+
+    pub fn flood_fill<A>(&mut self, distances: &Array2<A>)
     where A: DistanceMeasure,
     {
         if self.clusters.len() != distances.ncols() {
@@ -145,6 +107,11 @@ impl FloodFill {
         self.current = current;
     }
 }
+
+
+//--------------------------------------
+// Robust Single Linkage Clustering
+//--------------------------------------
 
 fn find_outliers(flood_fill: &FloodFill, outliers: &mut Array1<bool>, min_size: usize) -> bool {
     let mut new_outliers = false;
@@ -189,7 +156,7 @@ where A: DistanceMeasure,
     false
 }
 
-fn rslc<D, E>(distances: &ArrayBase<D, Ix2>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>)
+pub fn rslc<D, E>(distances: &ArrayBase<D, Ix2>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>)
 where 
     D: Data<Elem = E>,
     E: DistanceMeasure + Copy + PartialOrd,
@@ -219,75 +186,45 @@ where
     (flood_fill.clusters - flood_fill.start, outliers)
 }
 
+
+//--------------------------------------
+// Python Interface
+//--------------------------------------
+
+macro_rules! py_rslc1 {
+    ($($type:ident),+) => { $( paste! {
+        #[pyfunction]
+        #[text_signature = "(distance_matrix, num_clusters, min_size, /)"]
+        fn [<rslc_ $type>](py: Python<'_>, distances: PyReadonlyArray2<$type>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
+        {
+            let dists = distances.as_array();
+            let (clusters, outliers) = rslc(&dists, clusters, min_size);
+            Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
+        }
+    } )+ };
+}
+
+macro_rules! py_rslc2 {
+    ($m:ident, $($type:ident),+) => {$( paste! {
+        $m.add_wrapped(wrap_pyfunction!([<rslc_ $type>])).unwrap();
+    })+};
+}
+
+py_rslc1!(f32, f64, i16, i32, i64, u16, u32, u64);
+
+
 #[pymodule]
 fn rust_linalg(_py: Python<'_>, m: &PyModule) -> PyResult<()>
 {
-    #[pyfn(m, "rslc_f64")]
-    fn rslc_f64(py: Python<'_>, distances: PyReadonlyArray2<f64>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
-    {
-        let dists = distances.as_array();
-        let (clusters, outliers) = rslc(&dists, clusters, min_size);
-        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
-    }
-
-    #[pyfn(m, "rslc_f32")]
-    fn rslc_f32(py: Python<'_>, distances: PyReadonlyArray2<f32>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
-    {
-        let dists = distances.as_array();
-        let (clusters, outliers) = rslc(&dists, clusters, min_size);
-        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
-    }
-
-    #[pyfn(m, "rslc_i16")]
-    fn rslc_i16(py: Python<'_>, distances: PyReadonlyArray2<i16>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
-    {
-        let dists = distances.as_array();
-        let (clusters, outliers) = rslc(&dists, clusters, min_size);
-        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
-    }
-
-    #[pyfn(m, "rslc_i32")]
-    fn rslc_i32(py: Python<'_>, distances: PyReadonlyArray2<i32>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
-    {
-        let dists = distances.as_array();
-        let (clusters, outliers) = rslc(&dists, clusters, min_size);
-        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
-    }
-
-    #[pyfn(m, "rslc_i64")]
-    fn rslc_i64(py: Python<'_>, distances: PyReadonlyArray2<i64>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
-    {
-        let dists = distances.as_array();
-        let (clusters, outliers) = rslc(&dists, clusters, min_size);
-        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
-    }
-
-    #[pyfn(m, "rslc_u16")]
-    fn rslc_u16(py: Python<'_>, distances: PyReadonlyArray2<u16>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
-    {
-        let dists = distances.as_array();
-        let (clusters, outliers) = rslc(&dists, clusters, min_size);
-        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
-    }
-
-    #[pyfn(m, "rslc_u32")]
-    fn rslc_u32(py: Python<'_>, distances: PyReadonlyArray2<u32>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
-    {
-        let dists = distances.as_array();
-        let (clusters, outliers) = rslc(&dists, clusters, min_size);
-        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
-    }
-
-    #[pyfn(m, "rslc_u64")]
-    fn rslc_u64(py: Python<'_>, distances: PyReadonlyArray2<u64>, clusters: usize, min_size: usize) -> PyResult<(Py<PyArray1<usize>>, Py<PyArray1<bool>>)> 
-    {
-        let dists = distances.as_array();
-        let (clusters, outliers) = rslc(&dists, clusters, min_size);
-        Ok((clusters.into_pyarray(py).to_owned(), outliers.into_pyarray(py).to_owned()))
-    }
+    py_rslc2!(m, f32, f64, i16, i32, i64, u16, u32, u64);
 
     Ok(())
 }
+
+
+//--------------------------------------
+// Tests
+//--------------------------------------
 
 #[cfg(test)]
 mod tests {
