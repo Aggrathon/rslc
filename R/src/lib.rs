@@ -1,6 +1,7 @@
 use extendr_api::{export_function, RObj, list};
 use ndarray::{ArrayView2};
 use paste::paste;
+use rslc::rslc;
 
 //--------------------------------------
 // R Interface

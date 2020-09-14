@@ -3,10 +3,10 @@ use numpy::{IntoPyArray, PyReadonlyArray2, PyArray1};
 use pyo3::prelude::{pymodule, Py, PyModule, PyResult, Python, pyfunction};
 use pyo3::wrap_pyfunction;
 use paste::paste;
-use super::rslc;
+use rslc::rslc;
 
 //--------------------------------------
-// Python Interface
+// Python Interface for RSLC
 //--------------------------------------
 
 macro_rules! py_rslc1 {

@@ -3,11 +3,6 @@ use std::collections::VecDeque;
 use ndarray::{Array1, Array2, ArrayBase, Ix2, Data};
 use num_traits::PrimInt;
 
-// Optionally include the interfaces for other languages
-#[cfg(feature = "python")]
-mod python;
-#[cfg(feature = "r")]
-mod r;
 
 //--------------------------------------
 // Iterator over combinations
