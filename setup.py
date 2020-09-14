@@ -13,6 +13,7 @@ setup(
     rust_extensions=[RustExtension(
         'rslc.rslc',
         './Cargo.toml',
+        features= ["python"]
     )],
     install_requires=install_requires,
     setup_requires=setup_requires,
