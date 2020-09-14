@@ -12,6 +12,7 @@ use num_traits::PrimInt;
 /// 
 /// # Examples
 /// ```
+/// use rslc::Combinations;
 /// let combn: Vec<(u32, u32)> = Combinations::iter(4).collect();
 /// assert_eq!(combn, vec![(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]);
 /// ```
@@ -41,7 +42,14 @@ impl<A> Iterator for Combinations<A> where A: PrimInt {
 
 impl<A> Combinations<A> where A: PrimInt {
     /// Start the iterator over all unique sets of two integers (up to a maximum size).
-    /// Note that the maximum size is exclusive to math array index rules.
+    /// Note that the maximum size is exclusive (in order to math array index rules).
+    /// 
+    /// # Examples
+    /// ```
+    /// use rslc::Combinations;
+    /// let combn: Vec<(u32, u32)> = Combinations::iter(4).collect();
+    /// assert_eq!(combn, vec![(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]);
+    /// ```
     pub fn iter(n: A) -> Self {
         Combinations{n, a:A::zero(), b:A::zero()}
     }
@@ -90,19 +98,31 @@ dm!(usize, u16, u32, u64, u128; !=, Self::MAX, Self::MAX, 0);
 ///
 /// # Example
 /// ```
-/// let cluster_labels = FloodFill::new()::flood_fill(distance_matrix).clusters;
+/// use ndarray::Array2;
+/// use rslc::{Combinations, FloodFill};
+/// let mut ff = FloodFill::new();
+/// let distance_matrix: Array2<f32> = Array2::zeros((5, 5));
+/// let cluster_labels = &ff.flood_fill(&distance_matrix).clusters;
 /// ```
-///
 pub struct FloodFill {
     start: usize,
     current: usize,
     cache: VecDeque<usize>,
-    clusters: Array1<usize>,
-    sizes: Vec<(usize, usize)>,
+    pub clusters: Array1<usize>,
+    pub sizes: Vec<(usize, usize)>,
 }
 
 impl FloodFill {
     /// Create a new (empty) FloodFill struct.
+    ///
+    /// # Example
+    /// ```
+    /// use ndarray::Array2;
+    /// use rslc::{Combinations, FloodFill};
+    /// let mut ff = FloodFill::new();
+    /// let distance_matrix: Array2<f32> = Array2::zeros((5, 5));
+    /// let cluster_labels = &ff.flood_fill(&distance_matrix).clusters;
+    /// ```
     pub fn new() -> Self {
         FloodFill {
             start: 0,
@@ -116,6 +136,14 @@ impl FloodFill {
     /// Create a new FloodFill struct and immediately use it on a graph.
     /// The graph is represented by a adjacency / distance matrix.
     /// The results are stored in the returned struct.
+    ///
+    /// # Example
+    /// ```
+    /// use ndarray::Array2;
+    /// use rslc::{Combinations, FloodFill};
+    /// let distance_matrix: Array2<f32> = Array2::zeros((5, 5));
+    /// let cluster_labels = FloodFill::start(&distance_matrix).clusters;
+    /// ```
     pub fn start<A>(adjacency_matrix: &Array2<A>) -> Self
     where A: DistanceMeasure,
     {
@@ -127,6 +155,15 @@ impl FloodFill {
     /// Use a FloodFill struct to flood fill a graph.
     /// The graph is represented by a adjacency / distance matrix.
     /// The results are stored in the struct, which is returned for chaining.
+    ///
+    /// # Example
+    /// ```
+    /// use ndarray::Array2;
+    /// use rslc::{Combinations, FloodFill};
+    /// let mut ff = FloodFill::new();
+    /// let distance_matrix: Array2<f32> = Array2::zeros((5, 5));
+    /// let cluster_labels = &ff.flood_fill(&distance_matrix).clusters;
+    /// ```
     pub fn flood_fill<A>(&mut self, adjacency_matrix: &Array2<A>) -> &mut Self
     where A: DistanceMeasure,
     {
