@@ -1,16 +1,41 @@
+//! # Robust Single-Linkage Clustering
+//!
+//! A variant of hierarchical clustering with a single-linkage merging function.
+//! RSLC restricts the minimum size of the clusters, which makes it more robust
+//! to outliers (and can even detect some of them). The RSLC algorithm is
+//! inspired by the "Reverse-delete algorithm" for minimum spanning trees.
 
 use std::collections::VecDeque;
 use ndarray::{Array1, Array2, ArrayBase, Ix2, Data};
 use num_traits::PrimInt;
 
+/// takes two values and returns a sorted tuple
+///
+/// # Example
+///
+/// ```
+/// use rslc::sort_tuple;
+/// let (min1, max1) = sort_tuple(3, 8);
+/// let (min2, max2) = sort_tuple(8, 3);
+/// assert_eq!(min1, min2);
+/// assert_eq!(max1, max2);
+/// ```
+pub fn sort_tuple<A>(a: A, b: A) -> (A, A) where A: PartialOrd {
+    if a > b {
+        (b, a)
+    } else {
+        (a, b)
+    }
+}
 
 //--------------------------------------
 // Iterator over combinations
 //--------------------------------------
 
 /// An iterator that produces all unique sets of two integers up to a maximum size
-/// 
-/// # Examples
+///
+/// # Example
+///
 /// ```
 /// use rslc::Combinations;
 /// let combn: Vec<(u32, u32)> = Combinations::iter(4).collect();
@@ -34,7 +59,7 @@ impl<A> Iterator for Combinations<A> where A: PrimInt {
                 return Option::None;
             }
             self.b = self.a + A::one();
-           
+
         }
         Option::Some((self.a, self.b))
     }
@@ -55,8 +80,17 @@ impl<A> ExactSizeIterator for Combinations<A> where A: PrimInt {}
 impl<A> Combinations<A> where A: PrimInt {
     /// Start the iterator over all unique sets of two integers (up to a maximum size).
     /// Note that the maximum size is exclusive (in order to math array index rules).
-    /// 
-    /// # Examples
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the maximum size
+    ///
+    /// # Returns
+    ///
+    /// * `self` - a new iterator over all unique sets of size two with integers > 0 and < n
+    ///
+    /// # Example
+    ///
     /// ```
     /// use rslc::Combinations;
     /// let combn: Vec<(u32, u32)> = Combinations::iter(4).collect();
@@ -69,213 +103,149 @@ impl<A> Combinations<A> where A: PrimInt {
 
 
 //--------------------------------------
-// Trait for distances
-//--------------------------------------
-
-/// A trait that can be used for distances between nodes in a graph.
-/// 
-/// By default it is implemented for all basic numerical types:
-///   f32, f64, isize, i16, i32, i64, i128, usize, u16, u32, u64, u128.
-/// 
-pub trait DistanceMeasure {
-    fn is_finite(&self) -> bool;
-    const INFINITE_VALUE: Self;
-    const MINIMUM_VALUE: Self;
-}
-
-macro_rules! dm {
-    ($($type:ident),+; $isf_tt:tt, $isf_v:expr, $inf:expr, $min:expr) => {$(
-        impl DistanceMeasure for $type {
-            fn is_finite(&self) -> bool { *self $isf_tt $isf_v }
-            const INFINITE_VALUE: Self = $inf;
-            const MINIMUM_VALUE: Self = $min;
-        }
-     )+};
-}
-
-dm!(f32, f64; >=, 0.0, -1.0, 0.0);
-dm!(isize, i16, i32, i64, i128; >=, 0, -1, 0);
-dm!(usize, u16, u32, u64, u128; !=, Self::MAX, Self::MAX, 0);
-
-
-//--------------------------------------
 // Flood fill to find clusters
 //--------------------------------------
 
-/// Floodfill a graph to find all disconnected subgraphs. This can be used,
-/// e.g., for finding clusters. The graph is generally represented by a
-/// adjacency / distance matrix. It is implemented via a struct instead of a
-/// pure function to make it easier to reuse the datastructures if the flood
-/// fill is run multiple times (saves some memory allocation).
+/// Maintain an undirected unweighted graph with clusters where edges can be
+/// added and removed, changing the cluster memberships.
 ///
 /// # Example
+///
 /// ```
-/// use ndarray::Array2;
-/// use rslc::{Combinations, FloodFill};
-/// let mut ff = FloodFill::new();
-/// let distance_matrix: Array2<f32> = Array2::zeros((5, 5));
-/// ff.flood_fill(&distance_matrix);
+/// use rslc::GraphClusters;
+/// let mut cl = GraphClusters::new(5);
+/// cl.disconnect(1, 2);
+/// assert_eq!(cl.num_clusters(), 1)
 /// ```
-pub struct FloodFill {
+pub struct GraphClusters {
     current: usize,
     cache: VecDeque<usize>,
     visited: Array1<bool>,
+    adjacency: Array2<bool>,
     clusters: Array1<usize>,
     sizes: Vec<usize>,
 }
 
-impl FloodFill {
-    /// Create a new (empty) FloodFill struct.
+impl GraphClusters {
+    /// Create a new GraphClusters struct where the graph is fully connected.
+    ///
+    /// # Arguments
+    ///
+    /// * `num_nodes` - the number of nodes in the graph
+    ///
+    /// # Return
+    ///
+    /// * `self` - a new GraphClusters struct
     ///
     /// # Example
+    ///
     /// ```
-    /// use ndarray::Array2;
-    /// use rslc::{Combinations, FloodFill};
-    /// let mut ff = FloodFill::new();
-    /// let distance_matrix: Array2<f32> = Array2::zeros((5, 5));
-    /// ff.flood_fill(&distance_matrix);
+    /// use rslc::GraphClusters;
+    /// let mut cl = GraphClusters::new(5);
+    /// assert_eq!(cl.num_clusters(), 1)
     /// ```
-    pub fn new() -> Self {
-        FloodFill {
+    pub fn new(num_nodes: usize) -> Self {
+        let mut adj;
+        unsafe {
+            // Safety: the whole array is filled, so there are no uninitialised values
+            adj = Array2::uninitialized((num_nodes, num_nodes));
+            adj.fill(true);
+        }
+        let mut size = Vec::new();
+        size.push(num_nodes);
+        GraphClusters {
             current: 0,
             cache: VecDeque::new(),
-            visited: Array1::default(0),
-            clusters: Array1::default(0),
-            sizes: Vec::new(),
+            visited: Array1::default(num_nodes),
+            clusters: Array1::default(num_nodes),
+            adjacency: adj,
+            sizes: size,
         }
     }
 
-    /// Create a new FloodFill struct and immediately use it on a graph.
-    /// The graph is represented by a adjacency / distance matrix.
-    /// The results are stored in the returned struct.
+    /// Create a new GraphClusters struct where the graph is without any edges.
+    ///
+    /// # Arguments
+    ///
+    /// * `num_nodes` - the number of nodes in the graph
+    ///
+    /// # Return
+    ///
+    /// * `self` - a new GraphClusters struct
     ///
     /// # Example
+    ///
     /// ```
-    /// use ndarray::Array2;
-    /// use rslc::{Combinations, FloodFill};
-    /// let distance_matrix: Array2<f32> = Array2::zeros((5, 5));
-    /// let mut ff = FloodFill::start(&distance_matrix);
+    /// use rslc::GraphClusters;
+    /// let mut cl = GraphClusters::new_split(5);
+    /// cl.connect(1, 2);
+    /// assert_eq!(cl.num_clusters(), 4)
     /// ```
-    pub fn start<A>(adjacency_matrix: &Array2<A>) -> Self
-    where A: DistanceMeasure,
-    {
-        let mut ff = Self::new();
-        ff.flood_fill(adjacency_matrix);
-        ff
+    pub fn new_split(num_nodes: usize) -> Self {
+        GraphClusters {
+            current: 0,
+            cache: VecDeque::new(),
+            visited: Array1::default(num_nodes),
+            clusters: (0..num_nodes).collect(),
+            adjacency: Array2::default((num_nodes, num_nodes)),
+            sizes: vec![1; num_nodes],
+        }
     }
 
-    /// Create a new FloodFill struct and put all items into the same cluster.
-    /// The graph is represented by a adjacency / distance matrix.
-    /// The results are stored in the returned struct.
+    /// Remove an edge from the graph
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - one end of the edge (a node index)
+    /// * `end` -  the other end of the edge (another node index)
+    ///
+    /// # Return
+    ///
+    /// Returns `None` if the edge is not removable (outside the graph or not
+    /// existing) or if the removal didn't cause a change in the cluster
+    /// structure.
+    ///
+    /// Returns `Some((usize, usize))` if a new cluster is created. The `Some`
+    /// contains a tuple of the sizes of the new and old clusters.
     ///
     /// # Example
-    /// ```
-    /// use ndarray::Array2;
-    /// use rslc::{Combinations, FloodFill};
-    /// let mut distance_matrix: Array2<f32> = Array2::zeros((5, 5));
-    /// let mut ff = FloodFill::init(&distance_matrix);
-    /// ff.split_at(3, 4, &mut distance_matrix);
-    /// ```
-    pub fn init<A>(adjacency_matrix: &Array2<A>) -> Self
-    where A: DistanceMeasure,
-    {
-        let mut ff = Self::new();
-        ff.clusters = Array1::zeros(adjacency_matrix.ncols());
-        ff.sizes.push(adjacency_matrix.ncols());
-        ff
-    }
-
-    /// Use a FloodFill struct to flood fill a graph.
-    /// The graph is represented by a adjacency / distance matrix.
-    /// The results are stored in the struct, which is returned for chaining.
     ///
-    /// # Example
     /// ```
-    /// use ndarray::Array2;
-    /// use rslc::{Combinations, FloodFill};
-    /// let mut ff = FloodFill::new();
-    /// let distance_matrix: Array2<f32> = Array2::zeros((5, 5));
-    /// ff.flood_fill(&distance_matrix);
+    /// use rslc::GraphClusters;
+    /// let mut cl = GraphClusters::new(5);
+    /// cl.disconnect(1, 0);
+    /// cl.disconnect(1, 2);
+    /// cl.disconnect(1, 3);
+    /// cl.disconnect(1, 4);
+    /// assert_eq!(cl.num_clusters(), 2)
     /// ```
-    pub fn flood_fill<A>(&mut self, adjacency_matrix: &Array2<A>) -> &mut Self
-    where A: DistanceMeasure,
+    pub fn disconnect(&mut self, start: usize, end: usize) -> Option<(usize, usize)>
     {
-        if self.clusters.len() != adjacency_matrix.ncols() {
-            self.clusters = Array1::zeros(adjacency_matrix.ncols());
-            self.current = 0;
-            self.sizes.clear();
-        } else {
-            self.current += 1;
+        if start == end ||
+            start >= self.clusters.len() ||
+            end >= self.clusters.len() ||
+            self.adjacency[[start, end]] == false {
+            return  None;
         }
-        let start = self.current;
-        let mut current = start;
-        while let Some((i, _)) = self
-            .clusters
-            .iter()
-            .enumerate()
-            .find(|(_, x)| **x < start)
-        {
-            self.cache.clear();
-            self.clusters[i] = current;
-            self.cache.push_back(i);
-            let mut count = 1;
-            while let Some(i) = self.cache.pop_front() {
-                for (j, _) in adjacency_matrix
-                    .outer_iter()
-                    .nth(i)
-                    .unwrap()
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, y)| y.is_finite())
-                {
-                    if self.clusters[j] != current {
-                        self.clusters[j] = current;
-                        self.cache.push_back(j);
-                        count += 1;
-                    }
-                }
-            }
-            self.sizes.resize(current + 1, 0);
-            self.sizes[current] = count;
-            current += 1;
-        }
-        self.current = current;
-        self
-    }
-
-    //TODO documentation and tests
-    pub fn split_at<A>(&mut self, start: usize, end: usize, adjacency_matrix: &mut Array2<A>) -> Option<(usize, usize)>
-    where A: DistanceMeasure,
-    {
-        adjacency_matrix[[start, end]] = A::INFINITE_VALUE;
-        adjacency_matrix[[end, start]] = A::INFINITE_VALUE;
-        if self.clusters.len() != adjacency_matrix.ncols() {
-            self.clusters = Array1::zeros(adjacency_matrix.ncols());
-            self.sizes.clear();
-            self.sizes.push(adjacency_matrix.ncols());
-            self.current = 0;
-        }
-        if self.visited.len() != adjacency_matrix.ncols() {
-            self.visited = Array1::default(adjacency_matrix.ncols());
-        } else {
-            self.visited.fill(false);
-        }
+        self.adjacency[[start, end]] = false;
+        self.adjacency[[end, start]] = false;
+        self.visited.fill(false);
         // Breadth first search for the new cluster
         self.cache.clear();
         self.cache.push_back(start);
         self.visited[start] = true;
         while let Some(current) = self.cache.pop_front() {
-            for (i, (_, v)) in adjacency_matrix
+            for (i, (_, v)) in self.adjacency
                 .outer_iter()
                 .nth(current)
                 .unwrap()
                 .iter()
                 .zip(self.visited.iter_mut())
                 .enumerate()
-                .filter(|(_, (d, v))| d.is_finite() & !**v)
+                .filter(|(_, (d, v))| **d & !**v)
             {
                 // Early exit, since the cluster did not split
-                if adjacency_matrix[[end, i]].is_finite() {
+                if self.adjacency[[end, i]] {
                     return None;
                 }
                 *v = true;
@@ -293,54 +263,83 @@ impl FloodFill {
         self.sizes.resize(self.current + 1, 0);
         self.sizes[self.current] = count;
         self.sizes[self.clusters[end]] -= count;
-        Some((self.sizes[self.current], self.sizes[self.clusters[end]]))
+        Some((count, self.sizes[self.clusters[end]]))
     }
 
-    //TODO documentation and tests
-    pub fn join_at<A>(&mut self, start: usize, end: usize, adjacency_matrix: &mut Array2<A>) -> &mut Self
-    where A: DistanceMeasure + PartialEq,
+    /// Adds an edge to the graph
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - one end of the edge (a node index)
+    /// * `end` -  the other end of the edge (another node index)
+    ///
+    /// # Return
+    ///
+    /// * `self` - for chaining
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rslc::GraphClusters;
+    /// let mut cl = GraphClusters::new_split(5);
+    /// cl.connect(1, 2);
+    /// assert_eq!(cl.num_clusters(), 4)
+    /// ```
+    pub fn connect(&mut self, start: usize, end: usize) -> &mut Self
     {
-        let cluster_start = self.clusters[start];
-        let cluster_end = self.clusters[end];
-        if cluster_start != cluster_end {
-            for c in &mut self.clusters {
-                if *c == cluster_start {
-                    *c = cluster_end;
-                }
+        if start == end ||
+            start >= self.clusters.len() ||
+            end >= self.clusters.len() ||
+            self.adjacency[[start, end]] == true {
+            return self;
+        }
+        self.adjacency[[start, end]] = true;
+        self.adjacency[[end, start]] = true;
+        let (cla, clb) = (self.clusters[start], self.clusters[end]);
+        if cla == clb {
+            return self;
+        }
+        let (cla, clb) = sort_tuple(cla, clb);
+        for c in &mut self.clusters {
+            if *c == clb {
+                *c = cla;
             }
-            self.sizes[cluster_end] += self.sizes[cluster_start];
-            self.sizes[cluster_start] = 0;
-            if cluster_start == self.current {
-                self.sizes.resize(self.current, 0);
-                self.current -= 1;
-            }
-            if adjacency_matrix[[start, end]] == A::INFINITE_VALUE {
-                adjacency_matrix[[start, end]] = A::MINIMUM_VALUE;
-                adjacency_matrix[[end, start]] = A::MINIMUM_VALUE;
-            }
+        }
+        self.sizes[cla] += self.sizes[clb];
+        self.sizes[clb] = 0;
+        if clb == self.current {
+            self.sizes.resize(self.current, 0);
+            self.current -= 1;
         }
         self
     }
 
-    //TODO documentation and tests
+    /// Get a reference to the array of cluster (index) per node
     pub fn get_clusters(&self) -> &Array1<usize> {
         &self.clusters
     }
 
-    //TODO documentation and tests
-    pub fn get_sizes(&self) -> &Vec<usize> {
-        &self.sizes
-    }
-
-    //TODO documentation and tests
-    pub fn get_num_clusters(&self) -> usize {
+    // Get the number of clusters with at least one member
+    pub fn num_clusters(&self) -> usize {
         self.sizes.iter().filter(|u| **u > 0).count()
     }
 
-    //TODO documentation and tests
+    /// Shift the cluster indices to start from zero, sort the ckusters after
+    /// size (descending), and remove empty clusters.
+    ///
+    /// # Return
+    ///
+    /// * `self` - for chaining
+    ///
     pub fn clean_cluster_indices(&mut self) -> &mut Self {
         let mut order: Vec<usize> = (0..self.sizes.len()).collect();
         order.sort_unstable_by_key(|i| usize::MAX - self.sizes[*i]);
+        // Check if already in order
+        if None == order.iter().zip(0..self.sizes.len()).filter(|(o, i)| *o != i).nth(0) {
+            self.current = self.num_clusters() - 1;
+            self.sizes.resize(self.current + 1, 0);
+            return self;
+        }
         let mut repl = vec![0; order.len()];
         for (i, o) in order.iter_mut().enumerate() {
             repl[*o] = i;
@@ -352,7 +351,7 @@ impl FloodFill {
         for (s, o) in self.sizes.iter_mut().zip(order.iter()) {
             *s = *o;
         }
-        self.current = self.get_num_clusters() - 1;
+        self.current = self.num_clusters() - 1;
         self.sizes.resize(self.current + 1, 0);
         self
     }
@@ -364,40 +363,39 @@ impl FloodFill {
 //--------------------------------------
 
 /// TODO documentation
-pub fn rslc<D, E>(distances: &ArrayBase<D, Ix2>, clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>)
-where 
+pub fn rslc<D, E>(distances: &ArrayBase<D, Ix2>, num_clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>)
+where
     D: Data<Elem = E>,
-    E: DistanceMeasure + Copy + PartialOrd,
+    E: PartialOrd,
 {
-    let mut dists = distances.to_owned();
     let mut outliers = Array1::default(distances.ncols());
-    let mut flood_fill = FloodFill::init(&dists);
-    let mut order: Vec<(usize, usize)> = Combinations::iter(dists.ncols()).collect();
-    order.sort_unstable_by(|a, b| dists[*b].partial_cmp(&dists[*a]).unwrap());
+    let mut clusters = GraphClusters::new(distances.ncols());
+    let mut order: Vec<(usize, usize)> = Combinations::iter(distances.ncols()).collect();
+    order.sort_unstable_by(|a, b| distances[*b].partial_cmp(&distances[*a]).unwrap());
     for (i, j) in order.into_iter() {
-        if let Some((size_i, size_j)) = flood_fill.split_at(i, j, &mut dists) {
+        if let Some((size_i, size_j)) = clusters.disconnect(i, j) {
             // Check for outliers and enough clusters
             if size_i < min_size {
-                let cls = flood_fill.get_clusters();
+                let cls = clusters.get_clusters();
                 let cl_i = cls[i];
                 for (o, _) in outliers.iter_mut().zip(cls.iter()).filter(|(_, c)| **c == cl_i) {
                     *o = true;
                 }
-                flood_fill.join_at(i, j, &mut dists);
+                clusters.connect(i, j);
             } else if size_j < min_size {
-                let cls = flood_fill.get_clusters();
+                let cls = clusters.get_clusters();
                 let cl_j = cls[j];
                 for (o, _) in outliers.iter_mut().zip(cls.iter()).filter(|(_, c)| **c == cl_j) {
                     *o = true;
                 }
-                flood_fill.join_at(j, i, &mut dists);
-            } else if flood_fill.get_num_clusters() == clusters {
+                clusters.connect(j, i);
+            } else if clusters.num_clusters() == num_clusters {
                 break;
             }
         }
     }
-    flood_fill.clean_cluster_indices();
-    (flood_fill.clusters, outliers)
+    clusters.clean_cluster_indices();
+    (clusters.clusters, outliers)
 }
 
 
@@ -454,4 +452,5 @@ mod tests {
         assert_eq!(outliers, array![false,false,false, false,false,false, false,false,false,false,false,false, true,true]);
     }
 
+    //TODO more tests
 }
