@@ -9,6 +9,7 @@ use std::collections::VecDeque;
 use ndarray::{Array1, Array2, ArrayBase, Ix2, Data};
 use num_traits::PrimInt;
 
+
 /// takes two values and returns a sorted tuple
 ///
 /// # Example
@@ -362,7 +363,31 @@ impl GraphClusters {
 // Robust Single Linkage Clustering
 //--------------------------------------
 
-/// TODO documentation
+/// **Robust Single-Linkage Clustering** is a variant of hierarchical clustering
+/// with a single-linkage merging function. RSLC restricts the minimum size of
+/// the clusters, which makes it more robust to outliers (and any cluster
+/// smaller than that can be marked as outliers). The RSLC algorithm is inspired
+/// by the "Reverse-delete algorithm" for minimum spanning trees.
+///
+/// # Arguments
+///
+/// * `distances` - A symmetric matrix of distances between items
+/// * `num_clusters` - The number of clusters to find
+/// * `min_size` - The minimum size of a cluster, used to find and avoid outliers
+///
+/// # Returns
+///
+/// * Vector of cluster indix per item (the indices starts from zero, ordered according to size)
+/// * Binary vector of marked outliers
+///
+/// # Examples
+/// ```
+/// use rslc::rslc;
+/// use ndarray::array;
+/// let x = array![[0, 4, 3, 5, 1], [4, 0, 1, 5, 3], [3, 1, 0, 5, 2], [5, 5, 5, 0, 4], [1, 3, 2, 4, 0]];
+/// let (clusters, outliers) = rslc(&x, 2, 2);
+/// assert_eq!(array![false, false, false, true, false], outliers);
+/// ```
 pub fn rslc<D, E>(distances: &ArrayBase<D, Ix2>, num_clusters: usize, min_size: usize) -> (Array1<usize>, Array1<bool>)
 where
     D: Data<Elem = E>,
@@ -394,7 +419,9 @@ where
             }
         }
     }
+    dbg!(&clusters.clusters);
     clusters.clean_cluster_indices();
+    dbg!(&clusters.clusters);
     (clusters.clusters, outliers)
 }
 
@@ -412,12 +439,6 @@ mod tests {
     fn combn() {
         let combs: Vec<(u32, u32)> = Combinations::iter(5).collect();
         assert_eq!(combs, vec![(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),]);
-    }
-
-    #[test]
-    fn rslc_basic() {
-        let x = array![[0, 4, 3], [4, 0, 2], [3, 2, 0]];
-        rslc(&x, 3, 0);
     }
 
     #[test]
@@ -476,4 +497,5 @@ mod tests {
         cl = GraphClusters::new(5);
         assert_eq!(cl.num_clusters(), 1);
     }
+
 }
