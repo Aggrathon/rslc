@@ -27,7 +27,8 @@ reverse-delete usually handles new clusters).
 ## Pseudocode
 
 ```{pseudocode}
-Create an undirected fully connected graph G<N, E>, where the weights of the edges in E are the distances between the items (nodes) in N.
+Create an undirected fully connected graph G<N, E>,
+  where the weights of the edges in E are the distances between the items (nodes) in N.
 Sort E in descending order.
 For each edge e in E:
     Remove e from E.
@@ -38,7 +39,7 @@ For each edge e in E:
         If |G2| < min_size:
             Add e to E.
             mark every node n in G2 as an outlier.
-        If the desired number of subgraphs in G is reached:
+        If the desired number of disconnected subgraphs in G is reached:
             Return the disconnected subgraphs in G as clusters.
 ```
 
