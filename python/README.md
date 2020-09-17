@@ -1,6 +1,6 @@
 # Robust Single-Linkage Clustering
 
-> This is the Python version of RSLC ([the original can be found here](../))
+> This is the Python version of RSLC ([the original can be found here](../../../))
 
 *Robust Single-Linkage Clustering* is a robust variant of hierarchical
 clustering with a single-linkage merging function. The single-linkage strategy

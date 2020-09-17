@@ -58,4 +58,4 @@ of the number of distances we get a complexity of `O(|E|^2)`.
 
 The algorithm is implemented in Rust, but unfortunately it is, due to the
 sequential nature of the algorithm, single-threaded. There are also API bindings
-for python ([see the subdirectory](python/)) and R ([not yet working](R/)).
+for [Python](python/) and [R](R/) in respective subdirectories.
