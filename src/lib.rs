@@ -452,5 +452,28 @@ mod tests {
         assert_eq!(outliers, array![false,false,false, false,false,false, false,false,false,false,false,false, true,true]);
     }
 
-    //TODO more tests
+    #[test]
+    fn graph_cluster_test() {
+        let mut cl = GraphClusters::new_split(5);
+        cl.connect(1, 2);
+        assert_eq!(cl.num_clusters(), 4);
+        cl.connect(3, 2);
+        assert_eq!(cl.num_clusters(), 3);
+        cl.connect(4, 0);
+        assert_eq!(cl.num_clusters(), 2);
+        cl.connect(4, 2);
+        assert_eq!(cl.num_clusters(), 1);
+        cl.disconnect(3, 2);
+        assert_eq!(cl.num_clusters(), 2);
+        cl.disconnect(0, 4);
+        assert_eq!(cl.num_clusters(), 3);
+        cl.disconnect(0, 2);
+        assert_eq!(cl.num_clusters(), 3);
+        cl.connect(0, 3);
+        cl.clean_cluster_indices();
+        assert_eq!(cl.get_clusters()[2], 0);
+        assert_eq!(cl.get_clusters()[0], 1);
+        cl = GraphClusters::new(5);
+        assert_eq!(cl.num_clusters(), 1);
+    }
 }
