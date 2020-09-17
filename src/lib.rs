@@ -425,6 +425,12 @@ where
     (clusters.clusters, outliers)
 }
 
+// TODO: Try a bottom up approach where clusters are merged until k clusters are
+// found, then if any of the clusters is too small it is marked as outlier and
+// clusters are split until k non-outlier clusters are found. The difference to
+// the results from the procedure above is that here outliers are ignored
+// completely, where above they are assigned to the nearest cluster.
+
 
 //--------------------------------------
 // Tests

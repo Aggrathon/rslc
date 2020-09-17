@@ -7,9 +7,11 @@ clustering with a single-linkage merging function. The single-linkage strategy
 merges two clusters based on the minimum distance between any item in one
 cluster to any item in the other cluster. The advantage of single-linkage is
 that it is able to capture non-spherical clusters. The main downside is that it
-is really prone to capture outliers, i.e., items so far away from all (/most)
-other items that they create their own clusters. RSLC mitigates this issue with
-small outlier clusters by restricting the minimum size of the clusters.
+is really prone to capture outliers, i.e., items (or small groups of items) so
+far away from all other items that they create their own clusters, which stops
+single-linkage for finding the desired clusters, unless the number of clusters
+is quite large. RSLC mitigates this issue with small outlier clusters by
+restricting the minimum size of the clusters.
 
 To do this the clusters are created "top-down", by splitting clusters, rather
 than "bottom-up", by merging clusters. To do this we first need to recognise the
@@ -24,7 +26,7 @@ Furthermore, to make the algorithm more robust towards outliers we want to avoid
 too small clusters. After every edge removal we check if a new cluster is
 created. If the new cluster is smaller than a threshold then we can mark the
 items in that cluster as outliers and re-add the edge (just like how
-reverse-delete usually handles new clusters).
+reverse-delete usually avoids new clusters).
 
 ## Pseudocode
 
