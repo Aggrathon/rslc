@@ -337,6 +337,52 @@ impl GraphClusters {
         }
     }
 
+    /// Adds an edge to the graph that was just removed
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - one end of the edge (a node index)
+    /// * `end` -  the other end of the edge (another node index)
+    ///
+    /// # Return
+    ///
+    /// * `self` - for chaining
+    ///
+    /// # Safety
+    ///
+    /// This method is only safe to be called directly after calling disconnect
+    /// (or as long as the struct has not been modified since).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rslc::GraphClusters;
+    /// let mut cl = GraphClusters::new_split(5);
+    /// cl.connect(1, 2);
+    /// cl.disconnect(1, 2);
+    /// assert_eq!(cl.num_clusters(), 5)
+    /// unsafe { cl.revert_disconnect(1, 2); }
+    /// assert_eq!(cl.num_clusters(), 4)
+    /// ```
+    unsafe fn revert_disconnect(&mut self, start: usize, end: usize) -> &mut Self {
+        let cls_new = self.clusters[*self.cache.iter().nth(0).unwrap()];
+        let mut cls_old = self.clusters[start];
+        if cls_new == cls_old {
+            cls_old = self.clusters[end];
+        }
+        for i in self.cache.iter() {
+            self.clusters[*i] = cls_old;
+        }
+        if cls_new == self.current {
+            self.sizes.resize(self.current, 0);
+            self.current -= 1;
+        } else {
+            self.sizes[cls_new] = 0;
+        }
+        self.sizes[cls_old] += self.cache.len();
+        self
+    }
+
     /// Adds an edge to the graph
     ///
     /// # Arguments
@@ -373,11 +419,6 @@ impl GraphClusters {
             return self;
         }
         let (cla, clb) = sort_tuple(cla, clb);
-        // for c in &mut self.clusters {
-        //     if *c == clb {
-        //         *c = cla;
-        //     }
-        // }
         self.clusters.par_iter_mut().for_each(|c| {
             if *c == clb {
                 *c = cla
@@ -491,12 +532,20 @@ where
                 } else {
                     par_azip!((o in &mut outliers, c in cls) if *c == cl_i { *o = true});
                 }
-                clusters.connect(i, j);
+                unsafe {
+                    // SAFETY: This is only safe to call directly after disconnect.
+                    // Nothing has modified the clusters struct, so this is safe.
+                    clusters.revert_disconnect(i, j);
+                }
             } else if size_j < min_size {
                 let cls = clusters.get_clusters();
                 let cl_j = cls[j];
                 par_azip!((o in &mut outliers, c in cls) if *c == cl_j { *o = true});
-                clusters.connect(j, i);
+                unsafe {
+                    // SAFETY: This is only safe to call directly after disconnect.
+                    // Nothing has modified the clusters struct, so this is safe.
+                    clusters.revert_disconnect(i, j);
+                }
             } else if clusters.num_clusters() == num_clusters {
                 break;
             }
