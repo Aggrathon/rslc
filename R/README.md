@@ -52,11 +52,21 @@ For each edge e in E:
 There are `|E| = n * (n + 1) / 2` edges in the graph, where `n` is the number of
 items, so sorting the edges is `O(n^2 log(n))`. Looping through the edges takes
 `O(n^2)` and checking for subgraphs takes at most `O(n^2)`. This suggest a total
-complexity of `O(n^4)` which is quite horrible, but in practise the worst case
-will probably be closer to `O(n^3)` since the whole graph doesn't have to be
-evaluated in order to check for disconnected subgraphs (although I currently
-don't have a proof for the reduced complexity). Alternatively, phrased in terms
-of the number of distances we get a complexity of `O(|E|^2)`.
+complexity of `O(n^4)` which is quite horrible, but in practise it will probably
+be closer to `O(n^3)` since the whole graph doesn't have to be evaluated in
+order to check for disconnected subgraphs.
+
+By running the algorithm on different sized datasets and measuring the time we
+can fit polynomials to approximate the complexity. Here we can see that the
+third and fourth degree polynomials are almost identical and almost perfectly
+match the measured times, which suggests that `O(n^3)` might indeed be the real
+complexity (although I currently don't have a proof for that).
+
+![Empirical Complexity](../empirical_complexity.png)
+
+This also shows that on a modern machine RSLC with datasets up to a size of 5000
+is suitable for interactive use. Note that the time measured here only considers
+RSLC, things like calculating the distance matrix takes additional time.
 
 ## Installation
 
