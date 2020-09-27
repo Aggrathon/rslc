@@ -178,7 +178,6 @@ where
 /// assert_eq!(cl.num_clusters(), 1)
 /// ```
 pub struct GraphClusters {
-    current: usize,
     cache: ReIterQueue<usize>,
     visited: Array1<bool>,
     adjacency: Array2<bool>,
@@ -215,7 +214,6 @@ impl GraphClusters {
         let mut size = Vec::new();
         size.push(num_nodes);
         GraphClusters {
-            current: 0,
             cache: ReIterQueue::new(),
             visited: Array1::default(num_nodes),
             clusters: Array1::default(num_nodes),
@@ -245,7 +243,6 @@ impl GraphClusters {
     /// ```
     pub fn new_split(num_nodes: usize) -> Self {
         GraphClusters {
-            current: 0,
             cache: ReIterQueue::new(),
             visited: Array1::default(num_nodes),
             clusters: (0..num_nodes).collect(),
@@ -322,13 +319,13 @@ impl GraphClusters {
             }
         }
         // Apply the new cluster
-        self.current += 1;
+        let current = self.sizes.len();
         for i in self.cache.iter() {
-            self.clusters[*i] = self.current;
+            self.clusters[*i] = current;
         }
         let count = self.cache.len();
-        self.sizes.resize(self.current + 1, 0);
-        self.sizes[self.current] = count;
+        self.sizes.resize(current + 1, 0);
+        self.sizes[current] = count;
         self.sizes[self.clusters[end]] -= count;
         if flip {
             Some((self.sizes[self.clusters[end]], count))
@@ -360,11 +357,11 @@ impl GraphClusters {
     /// let mut cl = GraphClusters::new_split(5);
     /// cl.connect(1, 2);
     /// cl.disconnect(1, 2);
-    /// assert_eq!(cl.num_clusters(), 5)
+    /// assert_eq!(cl.num_clusters(), 5);
     /// unsafe { cl.revert_disconnect(1, 2); }
     /// assert_eq!(cl.num_clusters(), 4)
     /// ```
-    unsafe fn revert_disconnect(&mut self, start: usize, end: usize) -> &mut Self {
+    pub unsafe fn revert_disconnect(&mut self, start: usize, end: usize) -> &mut Self {
         let cls_new = self.clusters[*self.cache.iter().nth(0).unwrap()];
         let mut cls_old = self.clusters[start];
         if cls_new == cls_old {
@@ -373,9 +370,8 @@ impl GraphClusters {
         for i in self.cache.iter() {
             self.clusters[*i] = cls_old;
         }
-        if cls_new == self.current {
-            self.sizes.resize(self.current, 0);
-            self.current -= 1;
+        if cls_new == self.sizes.len() - 1 {
+            self.sizes.resize(cls_new, 0);
         } else {
             self.sizes[cls_new] = 0;
         }
@@ -426,9 +422,8 @@ impl GraphClusters {
         });
         self.sizes[cla] += self.sizes[clb];
         self.sizes[clb] = 0;
-        if clb == self.current {
-            self.sizes.resize(self.current, 0);
-            self.current -= 1;
+        if clb == self.sizes.len() - 1 {
+            self.sizes.resize(clb, 0);
         }
         self
     }
@@ -461,8 +456,7 @@ impl GraphClusters {
                 .filter(|(o, i)| *o != i)
                 .nth(0)
         {
-            self.current = self.num_clusters() - 1;
-            self.sizes.resize(self.current + 1, 0);
+            self.sizes.resize(self.num_clusters(), 0);
             return self;
         }
         let mut repl = vec![0; order.len()];
@@ -476,8 +470,7 @@ impl GraphClusters {
         for (s, o) in self.sizes.iter_mut().zip(order.iter()) {
             *s = *o;
         }
-        self.current = self.num_clusters() - 1;
-        self.sizes.resize(self.current + 1, 0);
+        self.sizes.resize(self.num_clusters(), 0);
         self
     }
 }
