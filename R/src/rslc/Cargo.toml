@@ -6,8 +6,8 @@ edition = "2018"
 
 [lib]
 name = "rslc"
-crate-type = ["dylib"]
+crate-type = ["staticlib"]
 
 [dependencies]
-rslc = { path = ".." }
-extendr-api = "0.1.2"
+rslc = { path = "../../.." }
+ndarray = "0.13"

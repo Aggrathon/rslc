@@ -8,6 +8,7 @@
 use ndarray::parallel::prelude::*;
 use ndarray::{Array1, Array2, ArrayBase, Data, Ix2};
 use num_traits::PrimInt;
+use std::cmp::Ordering;
 
 /// Takes two values and returns a sorted tuple
 ///
@@ -512,7 +513,11 @@ where
     let mut outliers = Array1::default(distances.ncols());
     let mut clusters = GraphClusters::new(distances.ncols());
     let mut order: Vec<(usize, usize)> = Combinations::iter(distances.ncols()).collect();
-    order.sort_unstable_by(|a, b| distances[*b].partial_cmp(&distances[*a]).unwrap());
+    order.sort_unstable_by(|a, b| {
+        distances[*b]
+            .partial_cmp(&distances[*a])
+            .unwrap_or(Ordering::Equal)
+    });
     for (i, j) in order.into_iter() {
         if let Some((size_i, size_j)) = clusters.disconnect(i, j) {
             // Check for outliers and enough clusters

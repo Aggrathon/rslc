@@ -1,0 +1,14 @@
+TARGET = $(subst 64,x86_64,$(subst 32,i686,$(WIN)))-pc-windows-gnu
+LIBDIR = rslc/target/$(TARGET)/release
+STATLIB = $(LIBDIR)/rslc.lib
+PKG_LIBS = -L$(LIBDIR) -lrslc -lws2_32 -ladvapi32 -luserenv
+
+all: clean
+
+$(SHLIB): $(STATLIB)
+
+$(STATLIB):
+	cargo build --target=$(TARGET) --release --manifest-path=rslc/Cargo.toml
+
+clean:
+	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) rslc/target

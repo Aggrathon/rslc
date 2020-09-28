@@ -1,0 +1,13 @@
+LIBDIR = rslc/target/release
+STATLIB = $(LIBDIR)/librslc.a
+PKG_LIBS = -L$(LIBDIR) -lrslc -lresolv
+
+all: clean
+
+$(SHLIB): $(STATLIB)
+
+$(STATLIB):
+	cargo build --release --manifest-path=rslc/Cargo.toml
+
+clean:
+	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) rslc/target
