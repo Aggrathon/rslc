@@ -77,6 +77,7 @@ First you need to have Rust (Cargo) installed: [Rust toolchain installer: rustup
 Simply run:
 
 ```bash
+pip install setuptools_rust
 pip install -e "git+https://github.com/Aggrathon/rslc/#egg=rslc&subdirectory=python"
 ```
 
@@ -92,6 +93,7 @@ cd rslc/python
 Then to build and install the package run:
 
 ```bash
+pip install setuptools_rust
 python setup.py develop
 ```
 
@@ -101,7 +103,7 @@ Alternatively, if you have [Maturin](https://github.com/PyO3/maturin) installed 
 maturin develop --release
 ```
 
-Finally, check that the python package is installed and working by running (optional, requires that `pytest` is installed):
+Finally, optionally check that the python package is installed and working by running (requires that `pytest` is installed):
 ```bash
 pytest
 ```

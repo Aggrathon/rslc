@@ -25,7 +25,7 @@ def test_rslc():
         [6,6,6 ,5,5,5, 6,5,4,3,3,4, 4,0]])
 
     # Correct Output
-    clusters = np.array([0,0,0, 1,1,1, 2,2,2,2,2,2, 2,2])
+    clusters = np.array([2,2,2, 1,1,1, 0,0,0,0,0,0, 0,0])
     outliers = np.array([False,False,False, False,False,False, False,False,False,False,False,False, True,True])
 
     # Try with an array of float64

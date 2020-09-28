@@ -8,7 +8,7 @@ test_requires = install_requires + ["pytest"]
 
 setup(
     name="rslc",
-    version="0.2.0",
+    version="1.0.0",
     description="Robust Single-Linkage Clustering",
     rust_extensions=[RustExtension("rslc.rslc", "./Cargo.toml")],
     install_requires=install_requires,
