@@ -72,12 +72,10 @@ RSLC, things like calculating the distance matrix takes additional time.
 
 Since the base algorithm is implemented in Rust you need to install Rust (Cargo): [Rust toolchain installer: rustup](https://rustup.rs/)
 
-Note, on Windows the GNU target needs to be installed (`x86_64-pc-windows-gnu` or `i686-pc-windows-gnu`) since R uses that compiler instead of the default, MSVC.
+Note: On Windows the GNU target needs to be installed (`x86_64-pc-windows-gnu` or `i686-pc-windows-gnu`) since R requires that compiler instead of the default, MSVC.
 
-The R package can then be installed with devtools:
+The R package can then be installed with:
 
 ```R
-install.packages("devtools")
-devtools::install()
+remotes::install_github("Aggrathon/rslc/R")
 ```
-

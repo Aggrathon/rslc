@@ -70,17 +70,38 @@ RSLC, things like calculating the distance matrix takes additional time.
 
 ## Installation
 
-To build and install the package you need to install the python dependencies:
+First you need to have Rust (Cargo) installed: [Rust toolchain installer: rustup](https://rustup.rs/)
 
-- `numpy`
-- `setuptools_rust` or `maturin`
-- `pytest` (Optional, used to check if the install is working)
+### Install directly from Github
 
-You also need to have Rust (Cargo) installed:
+Simply run:
 
-- [Rust toolchain installer: rustup](https://rustup.rs/)
+```bash
+pip install -e "git+https://github.com/Aggrathon/rslc/#egg=rslc&subdirectory=python"
+```
 
-Build and install the package by running `python setup.py develop`.
-Alternatively, if you have [Maturin](https://github.com/PyO3/maturin) installed run `maturin develop --release`.
+### Install from a local directory
 
-Finally check that the python package is installed and working by running `pytest`.
+First clone the repo:
+
+```bash
+git clone git@github.com:Aggrathon/rslc.git
+cd rslc/python
+```
+
+Then to build and install the package run:
+
+```bash
+python setup.py develop
+```
+
+Alternatively, if you have [Maturin](https://github.com/PyO3/maturin) installed run:
+
+```bash
+maturin develop --release
+```
+
+Finally, check that the python package is installed and working by running (optional, requires that `pytest` is installed):
+```bash
+pytest
+```
