@@ -78,6 +78,6 @@ The R package can then be installed with devtools:
 
 ```R
 install.packages("devtools")
-devtools::install(quick = TRUE)
+devtools::install()
 ```
 

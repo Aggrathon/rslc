@@ -17,7 +17,9 @@ extern "C"
 //' @param num_clusters the number of clusters to find
 //' @param min_size the minimum size of a cluster
 //'
-//' @return list of clusters (vector with cluster number for each item) and outliers (binary vector)
+//' @return
+//'   \item{clusters}{vector with the cluster id (number) for each item}
+//'   \item{outliers}{binary vector indicating outliers}
 //' @export
 //'
 //' @example

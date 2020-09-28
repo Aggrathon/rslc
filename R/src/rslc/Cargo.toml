@@ -1,6 +1,6 @@
 [package]
 name = "r_rslc"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Aggrathon <antonbjo@gmail.com>"]
 edition = "2018"
 
@@ -9,5 +9,5 @@ name = "rslc"
 crate-type = ["staticlib"]
 
 [dependencies]
-rslc = { path = "../../.." }
+rslc = { git = "https://github.com/Aggrathon/rslc/" }
 ndarray = "0.13"

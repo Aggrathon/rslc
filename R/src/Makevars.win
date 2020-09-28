@@ -11,4 +11,4 @@ $(STATLIB):
 	cargo build --target=$(TARGET) --release --manifest-path=rslc/Cargo.toml
 
 clean:
-	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) rslc/target
+	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS)
