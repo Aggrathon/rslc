@@ -66,8 +66,10 @@ This also shows that on a modern machine RSLC with datasets up to a size of 5000
 is suitable for interactive use. Note that the time measured here only considers
 RSLC, things like calculating the distance matrix takes additional time.
 
-## Implementation
+## Installation
 
-The algorithm is implemented in Rust, but unfortunately it is, due to the
-sequential nature of the algorithm, *mostly* single-threaded. There are also API bindings
-for [Python](python/) and [R](R/) in respective subdirectories.
+To use the algorithm in Rust add `rslc = { git = "https://github.com/Aggrathon/rslc/" }`
+under `[dependencies]` in your `Cago.toml`.
+
+There are also API bindings for [Python](python/) and [R](R/) in respective
+subdirectories.
