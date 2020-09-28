@@ -1,0 +1,5 @@
+# Some R specific files
+RcppExports.*
+.Rproj.user
+.Rhistory
+R.Rproj

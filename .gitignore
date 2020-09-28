@@ -5,14 +5,10 @@ target/
 *.rustfmt
 rusty-tags.*
 
-# Some Python specific files
-.tox/
-build/
-*.so
-*.egg-info/
-**/dist/
-__pycache__
-*.pyd
-
 # Some IDE specific files
 .vscode
+
+# Some build files
+*.o
+*.dll
+*.dynlib
