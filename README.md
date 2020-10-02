@@ -62,8 +62,8 @@ complexity (although I currently don't have a proof for that).
 
 ![Empirical Complexity](empirical_complexity.png)
 
-This also shows that on a modern machine RSLC with datasets up to a size of 5000
-is suitable for interactive use. Note that the time measured here only considers
+This also shows that, on a modern machine, RSLC is suitable for interactive use
+on datasets up to a size of 5000. Note that the time measured here only considers
 RSLC, things like calculating the distance matrix takes additional time.
 
 ## Installation
