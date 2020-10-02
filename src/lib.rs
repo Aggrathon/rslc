@@ -303,16 +303,14 @@ impl GraphClusters {
         while let Some(current) = self.cache.next() {
             for (i, (_, v)) in self
                 .adjacency
-                .outer_iter()
-                .nth(*current)
-                .unwrap()
+                .row(*current)
                 .iter()
                 .zip(self.visited.iter_mut())
                 .enumerate()
                 .filter(|(_, (d, v))| **d & !**v)
             {
                 // Early exit, since the cluster did not split
-                if self.adjacency[[end, i]] {
+                if self.adjacency[[i, end]] {
                     return None;
                 }
                 *v = true;

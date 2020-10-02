@@ -12,3 +12,4 @@ rusty-tags.*
 *.o
 *.dll
 *.dynlib
+.Rproj.user
